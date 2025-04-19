@@ -2,6 +2,7 @@ import User from "../models/user.model"
 import Message from "../models/message.model"
 import cloudinary from "../lib/cloudinary"
 import { io, getReceiverSocketId, getSenderSocketId } from "../lib/socket"
+import mongoose from "mongoose"
 
 export const getUsersForSidebar = async (req: any, res: any) => {
   try {
@@ -27,7 +28,7 @@ export const getMessages = async (req: any, res: any) => {
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
-    })
+    }).populate('reactions.userId', 'fullName profilePic')
 
     res.status(200).json(messages)
   } catch (error: any) {
@@ -94,3 +95,73 @@ export const sendMessage = async (req: any, res: any) => {
     res.status(500).json({ error: "Internal server error" })
   }
 }
+
+export const toggleReaction = async (req: any, res: any) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    if (!emoji) {
+      return res.status(400).json({ error: "Emoji is required" });
+    }
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Ensure userId is a string for comparison if needed, or ensure types match
+    const userIdStr = userId.toString();
+    const reactionIndex = message.reactions.findIndex(
+      (reaction: any) => reaction.emoji === emoji && reaction.userId.toString() === userIdStr
+    );
+
+    let updatedMessage;
+    if (reactionIndex > -1) {
+      // User has already reacted with this emoji, remove it
+      message.reactions.pull({ _id: message.reactions[reactionIndex]._id });
+      updatedMessage = await message.save();
+      console.log(`User ${userIdStr} removed reaction ${emoji} from message ${messageId}`);
+    } else {
+      // User has not reacted with this emoji, add it
+      message.reactions.push({ emoji, userId });
+      updatedMessage = await message.save();
+      console.log(`User ${userIdStr} added reaction ${emoji} to message ${messageId}`);
+    }
+
+    // Populate user details for reactions before emitting/sending
+    await updatedMessage.populate('reactions.userId', 'fullName profilePic');
+
+    // Emit event to both sender and receiver of the original message
+    const senderSocketId = getSenderSocketId(message.senderId.toString());
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString());
+
+    const reactionUpdatePayload = {
+        messageId: updatedMessage._id,
+        reactions: updatedMessage.reactions
+    };
+
+    if (senderSocketId) {
+        io.to(senderSocketId).emit("message-reaction-update", reactionUpdatePayload);
+        console.log(`Emitted message-reaction-update to sender ${message.senderId} (socket ${senderSocketId})`);
+    }
+    if (receiverSocketId && receiverSocketId !== senderSocketId) { // Avoid sending twice if sender is receiver
+        io.to(receiverSocketId).emit("message-reaction-update", reactionUpdatePayload);
+        console.log(`Emitted message-reaction-update to receiver ${message.receiverId} (socket ${receiverSocketId})`);
+    }
+    if (!senderSocketId && !receiverSocketId) {
+        console.log(`Neither sender (${message.senderId}) nor receiver (${message.receiverId}) are connected for reaction update.`);
+    }
+
+
+    res.status(200).json(updatedMessage);
+  } catch (error: any) {
+    console.error("Error in toggleReaction controller: ", error.message);
+    if (error instanceof mongoose.Error.CastError) {
+        return res.status(400).json({ error: "Invalid Message ID format" });
+    }
+    res.status(500).json({ error: "Internal server error" });
+  }
+};

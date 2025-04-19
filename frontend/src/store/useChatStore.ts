@@ -5,6 +5,16 @@ import { useAuthStore } from "./useAuthStore"
 
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
+interface Reaction {
+    _id: string; // Mongoose adds _id by default
+    emoji: string;
+    userId: {
+      _id: string;
+      fullName: string;
+      profilePic: string;
+    }; // Populated user info
+  }
+
 interface Message {
   _id: string
   text?: string
@@ -13,6 +23,7 @@ interface Message {
   receiverId: string
   createdAt: Date | string
   status: MessageStatus
+  reactions?: Reaction[]
 }
 
 interface User {
@@ -39,6 +50,7 @@ interface ChatStore {
   unsubscribeFromMessages: () => void
   markMessagesAsRead: (conversationPartnerId: string) => void
   resetUnreadCount: (userId: string) => void
+  toggleReaction: (messageId: string, emoji: string) => Promise<void>
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -139,6 +151,74 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
+  toggleReaction: async (messageId: string, emoji: string) => {
+    const { authUser } = useAuthStore.getState();
+    if (!authUser) {
+        toast.error("User not authenticated");
+        return;
+    }
+
+    const currentMessages = get().messages;
+    const messageIndex = currentMessages.findIndex(msg => msg._id === messageId);
+    if (messageIndex === -1) {
+        toast.error("Message not found locally");
+        return;
+    }
+
+    const originalMessage = currentMessages[messageIndex];
+    const existingReactions = originalMessage.reactions || [];
+    const currentUserReactionIndex = existingReactions.findIndex(
+        r => r.emoji === emoji && r.userId._id === authUser._id
+    );
+
+    // Optimistic update
+    let optimisticReactions: Reaction[];
+    if (currentUserReactionIndex > -1) {
+        // Remove reaction
+        optimisticReactions = existingReactions.filter((_, index) => index !== currentUserReactionIndex);
+    } else {
+        // Add reaction (create a temporary reaction object)
+        const tempReaction: Reaction = {
+            _id: Math.random().toString(36).substring(2, 15), // Temp ID
+            emoji,
+            userId: {
+                _id: authUser._id,
+                fullName: authUser.fullName,
+                profilePic: authUser.profilePic,
+            },
+        };
+        optimisticReactions = [...existingReactions, tempReaction];
+    }
+
+    const optimisticMessages = [...currentMessages];
+    optimisticMessages[messageIndex] = {
+        ...originalMessage,
+        reactions: optimisticReactions,
+    };
+
+    set({ messages: optimisticMessages });
+
+    // API call
+    try {
+        const res = await axiosInstance.post<Message>(
+            `/messages/${messageId}/reactions`,
+            { emoji }
+        );
+        const updatedMessageFromServer = res.data;
+
+        // Update state with server response (reconcile)
+        set(state => ({
+            messages: state.messages.map(msg =>
+                msg._id === messageId ? updatedMessageFromServer : msg
+            ),
+        }));
+    } catch (error) {
+        toast.error("Failed to update reaction: " + (error as Error).message);
+        // Revert optimistic update on error
+        set({ messages: currentMessages });
+    }
+  },
+
   markMessagesAsRead: (conversationPartnerId: string) => {
     const socket = useAuthStore.getState().socket;
     const { authUser } = useAuthStore.getState();
@@ -164,6 +244,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     socket.off("newMessage");
     socket.off("message-delivered");
     socket.off("messages-read");
+    socket.off("message-reaction-update");
 
     socket.on("newMessage", (newMessage: Message) => {
         console.log("Received newMessage event:", newMessage);
@@ -216,6 +297,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             ),
         }));
     });
+
+    socket.on("message-reaction-update", ({ messageId, reactions }: { messageId: string; reactions: Reaction[] }) => {
+        console.log(`Received message-reaction-update for message ${messageId}:`, reactions);
+        set(state => ({
+            messages: state.messages.map(msg =>
+                msg._id === messageId ? { ...msg, reactions } : msg
+            ),
+        }));
+    });
   },
 
   unsubscribeFromMessages: () => {
@@ -223,6 +313,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     socket?.off("newMessage")
     socket?.off("message-delivered")
     socket?.off("messages-read")
+    socket?.off("message-reaction-update")
     console.log("Unsubscribed from message events");
   },
 }))

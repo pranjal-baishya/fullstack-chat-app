@@ -20,22 +20,52 @@ export const getUsersForSidebar = async (req: any, res: any) => {
 
 export const getMessages = async (req: any, res: any) => {
   try {
-    const { id: userToChatId } = req.params
-    const myId = req.user._id
+    const { id: userToChatId } = req.params;
+    const myId = req.user._id;
+    const { cursor } = req.query; // Get cursor from query params
+    const limit = 20; // Number of messages to fetch per request
 
-    const messages = await Message.find({
+    const query: any = {
       $or: [
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
-    }).populate('reactions.userId', 'fullName profilePic')
+    };
 
-    res.status(200).json(messages)
+    // If a cursor is provided, fetch messages older than the cursor
+    if (cursor) {
+      query.createdAt = { $lt: new Date(cursor) };
+    }
+
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 }) // Sort descending to get the latest first (or oldest relative to cursor)
+      .limit(limit)
+      .populate('reactions.userId', 'fullName profilePic');
+
+    const reversedMessages = [...messages].reverse();
+
+    // Determine if there are more older messages to load
+    let hasMore = false;
+    if (messages.length > 0) {
+      const oldestMessageTimestamp = messages[0].createdAt; // Before reversing, the first is the oldest in this batch
+      const olderMessagesCount = await Message.countDocuments({
+        ...query, // Use the same base query
+        createdAt: { $lt: oldestMessageTimestamp }, // Check for messages strictly older
+      });
+      hasMore = olderMessagesCount > 0;
+    }
+
+    res.status(200).json({ messages: reversedMessages, hasMore }); // Send messages and hasMore flag
+
   } catch (error: any) {
-    console.log("Error in getMessages controller: ", error.message)
-    res.status(500).json({ error: "Internal server error" })
+    console.log("Error in getMessages controller: ", error.message);
+    // Check for invalid date format in cursor
+    if (error instanceof Error && error.message.includes("Invalid time value")) {
+        return res.status(400).json({ error: "Invalid cursor date format" });
+    }
+    res.status(500).json({ error: "Internal server error" });
   }
-}
+};
 
 export const sendMessage = async (req: any, res: any) => {
   try {

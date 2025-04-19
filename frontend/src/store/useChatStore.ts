@@ -34,6 +34,11 @@ interface User {
   lastSeen?: Date | string | null
 }
 
+interface GetMessagesResponse {
+  messages: Message[];
+  hasMore: boolean;
+}
+
 interface ChatStore {
   messages: Message[]
   users: User[]
@@ -42,9 +47,11 @@ interface ChatStore {
   setSelectedUser: (user: User | null) => void
   isUsersLoading: boolean
   isMessagesLoading: boolean
+  isLoadingMore: boolean
+  hasMoreMessages: boolean
 
   getUsers: () => Promise<void>
-  getMessages: (userId: string) => Promise<void>
+  getMessages: (userId: string, cursor?: string) => Promise<void>
   sendMessage: (messageData: { text?: string; image?: string }) => Promise<void>
   subscribeToMessages: () => void
   unsubscribeFromMessages: () => void
@@ -60,6 +67,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   unreadCounts: {},
   isUsersLoading: false,
   isMessagesLoading: false,
+  isLoadingMore: false,
+  hasMoreMessages: true,
 
   resetUnreadCount: (userId: string) => {
     set((state) => {
@@ -93,24 +102,49 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  getMessages: async (userId: string) => {
-    set({ isMessagesLoading: true })
+  getMessages: async (userId: string, cursor?: string) => {
+    const isLoadingInitial = !cursor;
+    if (isLoadingInitial) {
+      set({ isMessagesLoading: true, messages: [], hasMoreMessages: true });
+    } else {
+      set({ isLoadingMore: true });
+    }
+
     const { authUser } = useAuthStore.getState();
-    if (!authUser) return set({ isMessagesLoading: false });
+    if (!authUser) {
+      set({ isMessagesLoading: false, isLoadingMore: false });
+      return;
+    }
 
     try {
-      const res = await axiosInstance.get<Message[]>(`/messages/${userId}`)
-      const fetchedMessages = res.data;
-      set({ messages: fetchedMessages })
+      const params = cursor ? { cursor } : {};
+      const res = await axiosInstance.get<GetMessagesResponse>(`/messages/${userId}`, {
+        params,
+      });
+      const { messages: fetchedMessages, hasMore } = res.data;
 
-      get().markMessagesAsRead(userId);
-      get().resetUnreadCount(userId);
+      set((state) => ({
+        messages: cursor
+          ? [...fetchedMessages, ...state.messages]
+          : fetchedMessages,
+        hasMoreMessages: hasMore,
+      }));
+
+      if (isLoadingInitial) {
+          get().markMessagesAsRead(userId);
+          get().resetUnreadCount(userId);
+      }
 
     } catch (error) {
-      toast.error("Failed to fetch messages: " + (error as Error).message)
-      set({ messages: [] })
+      toast.error("Failed to fetch messages: " + (error as Error).message);
+      if (isLoadingInitial) {
+        set({ messages: [] });
+      }
     } finally {
-      set({ isMessagesLoading: false })
+      if (isLoadingInitial) {
+        set({ isMessagesLoading: false });
+      }
+      set({ isLoadingMore: false });
     }
   },
 
@@ -256,20 +290,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (isChatOpen) {
              set((state) => ({ messages: [...state.messages, newMessage] }));
             get().markMessagesAsRead(senderId);
-        } else {
-            if (senderId !== authUser._id) {
-                set((state) => {
-                    const newCounts = { ...state.unreadCounts };
-                    newCounts[senderId] = (newCounts[senderId] || 0) + 1;
-                    console.log(`Incremented unread count for ${senderId}:`, newCounts[senderId]);
-                    return { unreadCounts: newCounts };
-                });
+        } else if (senderId !== authUser?._id) {
+            set((state) => {
+                const newCounts = { ...state.unreadCounts };
+                newCounts[senderId] = (newCounts[senderId] || 0) + 1;
+                console.log(`Incremented unread count for ${senderId}:`, newCounts[senderId]);
+                return { unreadCounts: newCounts };
+            });
 
-                const sender = users.find(user => user._id === senderId);
-                toast(`New message from ${sender?.fullName || 'Unknown'}`, {
-                    icon: '✉️',
-                });
-            }
+            const sender = users.find(user => user._id === senderId);
+            toast(`New message from ${sender?.fullName ?? 'Unknown'}`, {
+                icon: '✉️',
+            });
         }
     });
 

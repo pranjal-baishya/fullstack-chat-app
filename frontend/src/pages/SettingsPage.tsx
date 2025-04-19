@@ -1,6 +1,8 @@
 import { useThemeStore } from "../store/useThemeStore"
-import { Send } from "lucide-react"
+import { Send, ArrowLeft } from "lucide-react"
 import { THEMES } from "../lib/constants"
+import { useNavigate } from "react-router-dom"
+import { useState } from "react"
 
 const PREVIEW_MESSAGES = [
   { id: 1, content: "Hey! How's it going?", isSent: false },
@@ -13,9 +15,26 @@ const PREVIEW_MESSAGES = [
 
 const SettingsPage = () => {
   const { theme, setTheme } = useThemeStore()
+  const navigate = useNavigate()
+  const [previewTheme, setPreviewTheme] = useState(theme)
+
+  const handleThemeChange = (newTheme: string) => {
+    setTheme(newTheme)
+    setPreviewTheme(newTheme)
+  }
 
   return (
     <div className="h-screen container mx-auto px-4 pt-20 max-w-5xl">
+      {/* Back Button - Moved outside the content div */}
+      <button
+        onClick={() => navigate("/")}
+        className="btn btn-ghost btn-sm mb-4 flex items-center gap-2 w-fit"
+      >
+        <ArrowLeft size={16} />
+        Back
+      </button>
+
+      {/* Main Content Div */}
       <div className="space-y-6">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Theme</h2>
@@ -30,12 +49,14 @@ const SettingsPage = () => {
               key={t}
               className={`
                 group flex flex-col items-center gap-1.5 p-2 rounded-lg transition-colors
-                ${theme === t ? "bg-base-200" : "hover:bg-base-200/50"}
+                ${theme === t ? "bg-base-200 ring-2 ring-primary" : "hover:bg-base-200/50"}
               `}
-              onClick={() => setTheme(t)}
+              onClick={() => handleThemeChange(t)}
+              onMouseEnter={() => setPreviewTheme(t)}
+              onMouseLeave={() => setPreviewTheme(theme)}
             >
               <div
-                className="relative h-8 w-full rounded-md overflow-hidden"
+                className="relative h-8 w-full rounded-md overflow-hidden border border-base-content/10"
                 data-theme={t}
               >
                 <div className="absolute inset-0 grid grid-cols-4 gap-px p-1">
@@ -54,7 +75,7 @@ const SettingsPage = () => {
 
         {/* Preview Section */}
         <h3 className="text-lg font-semibold mb-3">Preview</h3>
-        <div className="rounded-xl border border-base-300 overflow-hidden bg-base-100 shadow-lg">
+        <div data-theme={previewTheme} className="rounded-xl border border-base-300 overflow-hidden bg-base-100 shadow-lg">
           <div className="p-4 bg-base-200">
             <div className="max-w-lg mx-auto">
               {/* Mock Chat UI */}

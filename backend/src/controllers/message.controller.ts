@@ -1,7 +1,7 @@
 import User from "../models/user.model"
 import Message from "../models/message.model"
 import cloudinary from "../lib/cloudinary"
-import { io, getReceiverSocketId } from "../lib/socket"
+import { io, getReceiverSocketId, getSenderSocketId } from "../lib/socket"
 
 export const getUsersForSidebar = async (req: any, res: any) => {
   try {
@@ -58,11 +58,36 @@ export const sendMessage = async (req: any, res: any) => {
 
     await newMessage.save()
 
+    // Check if receiver is online
     const receiverSocketId = getReceiverSocketId(receiverId)
     if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage)
+        // Emit newMessage event to the receiver
+        io.to(receiverSocketId).emit("newMessage", newMessage);
+        console.log(`Emitted newMessage to receiver ${receiverId} (socket ${receiverSocketId})`);
+
+        // Update status to 'delivered' in DB
+        try {
+            await Message.findByIdAndUpdate(newMessage._id, { status: 'delivered' });
+            newMessage.status = 'delivered'; // Update the object we send back/emit
+            console.log(`Updated message ${newMessage._id} status to delivered in DB`);
+
+             // Notify the sender that the message was delivered
+            const senderSocketId = getSenderSocketId(senderId.toString());
+            if (senderSocketId) {
+                io.to(senderSocketId).emit("message-delivered", { messageId: newMessage._id, receiverId: receiverId });
+                console.log(`Emitted message-delivered to sender ${senderId} (socket ${senderSocketId}) for message ${newMessage._id}`);
+            } else {
+                console.log(`Sender ${senderId} not connected, cannot emit message-delivered`);
+            }
+        } catch (dbError) {
+            console.error(`Error updating message ${newMessage._id} status to delivered:`, dbError);
+            // Decide how to handle this - maybe proceed without emitting 'delivered'?
+        }
+    } else {
+        console.log(`Receiver ${receiverId} not connected, message status remains 'sent'`);
     }
 
+    // Respond to the sender's HTTP request
     res.status(201).json(newMessage)
   } catch (error: any) {
     console.log("Error in sendMessage controller: ", error.message)

@@ -30,24 +30,30 @@ const MessageInput = () => {
 
   const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!text.trim() && !imagePreview) return
+    const trimmedText = text.trim();
+    if (!trimmedText && !imagePreview) return
+
+    // Prepare the data expected by the updated sendMessage store function
+    const messagePayload: { text?: string; image?: string } = {};
+    if (trimmedText) {
+        messagePayload.text = trimmedText;
+    }
+    if (imagePreview) {
+        messagePayload.image = imagePreview;
+    }
 
     try {
-      await sendMessage({
-        text: text.trim(),
-        image: imagePreview ?? "",
-        _id: "",
-        senderId: "",
-        receiverId: "",
-        createdAt: new Date(),
-      })
+      // Call sendMessage with only text and/or image
+      await sendMessage(messagePayload);
 
       // Clear form
       setText("")
       setImagePreview(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
     } catch (error) {
-      console.error("Failed to send message:", error)
+      // Error handling is likely done within the store, but log here if needed
+      console.error("Error occurred during sendMessage call:", error)
+      toast.error("Failed to send message. Please try again."); // Optional: show toast here too
     }
   }
 

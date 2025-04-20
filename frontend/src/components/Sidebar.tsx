@@ -94,14 +94,13 @@ const Sidebar = () => {
           </div>
         </div>
         <div className="flex gap-2 mt-4">
-          {["All", "Unread", "Favourites", "Groups"].map((filter) => (
+          {["All", "Unread", "Favourites"].map((filter) => (
             <button
               key={filter}
               className={`btn btn-xs ${
                 activeFilter === filter ? "btn-primary" : "btn-ghost"
               }`}
               onClick={() => setActiveFilter(filter)}
-              disabled={filter === "Groups"}
             >
               {filter}
             </button>
@@ -123,11 +122,12 @@ const Sidebar = () => {
               key={user._id}
               className={`
                 relative group flex items-center justify-between border-l-4 transition-colors duration-150 ease-in-out
-                ${isSelected
-                   ? "bg-base-200 border-primary"
-                   : "border-transparent hover:bg-base-300/50"
+                ${
+                  isSelected
+                    ? "bg-base-200 border-primary"
+                    : "border-transparent hover:bg-base-300/50"
                 }
-                ${isPinned ? 'bg-base-200/50' : ''}
+                ${isPinned ? "bg-base-200/50" : ""}
               `}
             >
               <button

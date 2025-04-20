@@ -8,21 +8,18 @@ export const getUsersForSidebar = async (req: any, res: any) => {
   try {
     const loggedInUserId = req.user._id
 
-    // Fetch the logged-in user to get their favourites list
     const me = await User.findById(loggedInUserId).select('favourites')
     if (!me) {
         return res.status(404).json({ error: "Authenticated user not found" })
     }
-    const myFavourites = me.favourites.map(id => id.toString()) // Convert ObjectIds to strings
+    const myFavourites = me.favourites.map(id => id.toString())
 
-    // Find other users
     const filteredUsers = await User.find({
       _id: { $ne: loggedInUserId },
-    }).select("-password -favourites") // Exclude password and favourites array from other users
+    }).select("-password -favourites")
 
-    // Add isFavourite flag to each user
     const usersWithFavouriteStatus = filteredUsers.map(user => {
-        const userObj = user.toObject() // Convert Mongoose doc to plain object
+        const userObj = user.toObject()
         return {
             ...userObj,
             isFavourite: myFavourites.includes(userObj._id.toString()),
@@ -41,8 +38,8 @@ export const getMessages = async (req: any, res: any) => {
   try {
     const { id: userToChatId } = req.params;
     const myId = req.user._id;
-    const { cursor } = req.query; // Get cursor from query params
-    const limit = 20; // Number of messages to fetch per request
+    const { cursor } = req.query; 
+    const limit = 20;
 
     const query: any = {
       $or: [
@@ -51,34 +48,31 @@ export const getMessages = async (req: any, res: any) => {
       ],
     };
 
-    // If a cursor is provided, fetch messages older than the cursor
     if (cursor) {
       query.createdAt = { $lt: new Date(cursor) };
     }
 
     const messages = await Message.find(query)
-      .sort({ createdAt: -1 }) // Sort descending to get the latest first (or oldest relative to cursor)
+      .sort({ createdAt: -1 })
       .limit(limit)
       .populate('reactions.userId', 'fullName profilePic');
 
     const reversedMessages = [...messages].reverse();
 
-    // Determine if there are more older messages to load
     let hasMore = false;
     if (messages.length > 0) {
-      const oldestMessageTimestamp = messages[0].createdAt; // Before reversing, the first is the oldest in this batch
+      const oldestMessageTimestamp = messages[0].createdAt;
       const olderMessagesCount = await Message.countDocuments({
-        ...query, // Use the same base query
-        createdAt: { $lt: oldestMessageTimestamp }, // Check for messages strictly older
+        ...query,
+        createdAt: { $lt: oldestMessageTimestamp },
       });
       hasMore = olderMessagesCount > 0;
     }
 
-    res.status(200).json({ messages: reversedMessages, hasMore }); // Send messages and hasMore flag
+    res.status(200).json({ messages: reversedMessages, hasMore });
 
   } catch (error: any) {
     console.log("Error in getMessages controller: ", error.message);
-    // Check for invalid date format in cursor
     if (error instanceof Error && error.message.includes("Invalid time value")) {
         return res.status(400).json({ error: "Invalid cursor date format" });
     }
@@ -121,7 +115,6 @@ export const sendMessage = async (req: any, res: any) => {
             newMessage.status = 'delivered'; // Update the object we send back/emit
             console.log(`Updated message ${newMessage._id} status to delivered in DB`);
 
-             // Notify the sender that the message was delivered
             const senderSocketId = getSenderSocketId(senderId.toString());
             if (senderSocketId) {
                 io.to(senderSocketId).emit("message-delivered", { messageId: newMessage._id, receiverId: receiverId });
@@ -131,7 +124,6 @@ export const sendMessage = async (req: any, res: any) => {
             }
         } catch (dbError) {
             console.error(`Error updating message ${newMessage._id} status to delivered:`, dbError);
-            // Decide how to handle this - maybe proceed without emitting 'delivered'?
         }
     } else {
         console.log(`Receiver ${receiverId} not connected, message status remains 'sent'`);

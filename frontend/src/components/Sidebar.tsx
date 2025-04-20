@@ -43,19 +43,23 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <div className="overflow-y-auto w-full py-3">
+      <div className="overflow-y-auto w-full py-3 flex-1">
         {filteredUsers.map((user) => {
             const isOnline = onlineUsers.includes(user._id);
             const count = unreadCounts[user._id] || 0;
+            const isSelected = selectedUser?._id === user._id;
 
             return (
               <button
                 key={user._id}
                 onClick={() => setSelectedUser?.(user)}
                 className={`
-                  w-full p-3 flex items-center gap-3 relative
-                  hover:bg-base-300 transition-colors
-                  ${selectedUser?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
+                  w-full p-3 flex items-center gap-3 relative border-l-4
+                  transition-colors duration-150 ease-in-out
+                  ${isSelected
+                    ? "bg-base-200 border-primary"
+                    : "border-transparent hover:bg-base-300/50"
+                  }
                 `}
               >
                 <div className="relative mx-auto lg:mx-0">

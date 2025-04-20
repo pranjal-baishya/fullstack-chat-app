@@ -243,8 +243,12 @@ const ChatContainer = () => {
           return (
             <div key={message._id} className="relative">
               {showDateSeparator && (
-                <div className="text-center text-xs text-zinc-500 my-3">
-                  {formatDateSeparator(messageDate)}
+                <div className="flex items-center justify-center my-3">
+                  <hr className="flex-grow border-t border-base-300/50 mx-4" />
+                  <span className="text-xs text-base-content/50">
+                    {formatDateSeparator(messageDate)}
+                  </span>
+                  <hr className="flex-grow border-t border-base-300/50 mx-4" />
                 </div>
               )}
 

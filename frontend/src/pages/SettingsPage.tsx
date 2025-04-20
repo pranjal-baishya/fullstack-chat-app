@@ -34,8 +34,8 @@ const SettingsPage = () => {
         Back
       </button>
 
-      {/* Main Content Div */}
-      <div className="space-y-6">
+      {/* Apply theme-adaptive card styling to the main content container */}
+      <div className="space-y-6 bg-base-100 border border-base-300 rounded-xl p-6 shadow-sm">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Theme</h2>
           <p className="text-sm text-base-content/70">
@@ -75,7 +75,7 @@ const SettingsPage = () => {
 
         {/* Preview Section */}
         <h3 className="text-lg font-semibold mb-3">Preview</h3>
-        <div data-theme={previewTheme} className="rounded-xl border border-base-300 overflow-hidden bg-base-100 shadow-lg">
+        <div data-theme={previewTheme} className="rounded-xl border border-base-300/50 overflow-hidden bg-base-100 shadow-inner">
           <div className="p-4 bg-base-200">
             <div className="max-w-lg mx-auto">
               {/* Mock Chat UI */}

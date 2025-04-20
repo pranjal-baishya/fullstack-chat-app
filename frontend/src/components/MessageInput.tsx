@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useChatStore } from "../store/useChatStore"
-import { Image, Send, X, Smile } from "lucide-react"
+import { Image, SendHorizontal, X, Smile } from "lucide-react"
 import toast from "react-hot-toast"
 import EmojiPicker, {
   Theme,
@@ -13,7 +13,7 @@ const MessageInput = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const textInputRef = useRef<HTMLInputElement>(null)
+  const textInputRef = useRef<HTMLTextAreaElement>(null)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
   const emojiButtonRef = useRef<HTMLButtonElement>(null)
   const { sendMessage } = useChatStore()
@@ -38,42 +38,51 @@ const MessageInput = () => {
   }
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
-    const input = textInputRef.current
-    if (!input) return
+    const textarea = textInputRef.current
+    if (!textarea) return
 
-    const start = input.selectionStart ?? text.length
-    const end = input.selectionEnd ?? text.length
+    const start = textarea.selectionStart ?? text.length
+    const end = textarea.selectionEnd ?? text.length
     const newText =
       text.substring(0, start) + emojiData.emoji + text.substring(end)
     setText(newText)
 
     const newCursorPosition = start + emojiData.emoji.length
     setTimeout(() => {
-      input.focus()
-      input.setSelectionRange(newCursorPosition, newCursorPosition)
+      textarea.focus()
+      textarea.setSelectionRange(newCursorPosition, newCursorPosition)
+      adjustTextareaHeight()
     }, 0)
   }
 
-  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const adjustTextareaHeight = () => {
+    const textarea = textInputRef.current
+    if (textarea) {
+      textarea.style.height = "auto"
+      textarea.style.height = `${textarea.scrollHeight}px`
+    }
+  }
+
+  useEffect(() => {
+    adjustTextareaHeight()
+  }, [text])
+
+  const handleSendMessage = async (e?: React.FormEvent<HTMLFormElement>) => {
+    e?.preventDefault()
     const trimmedText = text.trim()
     if (!trimmedText && !imagePreview) return
 
-    const messagePayload: { text?: string; image?: string } = {}
-    if (trimmedText) {
-      messagePayload.text = trimmedText
-    }
-    if (imagePreview) {
-      messagePayload.image = imagePreview
-    }
-
     try {
-      await sendMessage(messagePayload)
+      await sendMessage({
+        text: trimmedText || undefined,
+        image: imagePreview ?? undefined,
+      })
 
       setText("")
       setImagePreview(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
       setShowEmojiPicker(false)
+      setTimeout(adjustTextareaHeight, 0)
     } catch (error) {
       console.error("Error occurred during sendMessage call:", error)
       toast.error("Failed to send message. Please try again.")
@@ -128,7 +137,7 @@ const MessageInput = () => {
       {showEmojiPicker && (
         <div
           ref={emojiPickerRef}
-          className="absolute bottom-full right-4 mb-2 z-20"
+          className="absolute bottom-full left-4 mb-2 z-20"
         >
           <EmojiPicker
             onEmojiClick={handleEmojiClick}
@@ -142,35 +151,42 @@ const MessageInput = () => {
         </div>
       )}
 
-      <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-base-200 rounded-lg p-1">
-          <button
-            ref={emojiButtonRef}
-            type="button"
-            className="btn btn-sm btn-circle btn-ghost"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          >
-            <Smile size={20} className="text-zinc-400" />
-          </button>
-
-          <input
-            ref={textInputRef}
-            type="text"
-            className="w-full input input-ghost input-sm focus:outline-none focus:border-none focus:ring-0 bg-transparent placeholder:text-zinc-500"
-            placeholder="Type a message..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-
+      <form onSubmit={handleSendMessage} className="flex items-end gap-2">
+        <div className="flex-1 flex items-end gap-1 bg-base-200 rounded-lg p-2 border border-base-300">
           <button
             type="button"
-            className={`btn btn-sm btn-circle btn-ghost ${
+            className={`btn btn-sm btn-circle btn-ghost self-end mb-1 ${
               imagePreview ? "text-emerald-500" : "text-zinc-400"
             }`}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Image size={20} />
+            <Image size={18} />
           </button>
+          <button
+            ref={emojiButtonRef}
+            type="button"
+            className="btn btn-sm btn-circle btn-ghost self-end mb-1"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          >
+            <Smile size={18} className="text-zinc-400" />
+          </button>
+
+          <textarea
+            ref={textInputRef}
+            rows={1}
+            className="flex-1 textarea bg-transparent p-1.5 text-sm resize-none overflow-y-auto focus:outline-none placeholder:text-zinc-500 align-bottom"
+            placeholder="Type a message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            style={{ maxHeight: "calc(1.5rem * 5)" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                handleSendMessage()
+              }
+            }}
+          />
+
           <input
             type="file"
             accept="image/*"
@@ -178,15 +194,15 @@ const MessageInput = () => {
             ref={fileInputRef}
             onChange={handleImageChange}
           />
-        </div>
 
-        <button
-          type="submit"
-          className="btn btn-sm btn-circle"
-          disabled={!text.trim() && !imagePreview}
-        >
-          <Send size={22} />
-        </button>
+          <button
+            type="submit"
+            className="btn btn-sm btn-circle btn-ghost self-end mb-1 text-primary disabled:text-base-content/30"
+            disabled={!text.trim() && !imagePreview}
+          >
+            <SendHorizontal size={20} />
+          </button>
+        </div>
       </form>
     </div>
   )

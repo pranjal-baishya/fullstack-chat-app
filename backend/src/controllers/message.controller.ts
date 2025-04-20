@@ -7,11 +7,30 @@ import mongoose from "mongoose"
 export const getUsersForSidebar = async (req: any, res: any) => {
   try {
     const loggedInUserId = req.user._id
+
+    // Fetch the logged-in user to get their favourites list
+    const me = await User.findById(loggedInUserId).select('favourites')
+    if (!me) {
+        return res.status(404).json({ error: "Authenticated user not found" })
+    }
+    const myFavourites = me.favourites.map(id => id.toString()) // Convert ObjectIds to strings
+
+    // Find other users
     const filteredUsers = await User.find({
       _id: { $ne: loggedInUserId },
-    }).select("-password")
+    }).select("-password -favourites") // Exclude password and favourites array from other users
 
-    res.status(200).json(filteredUsers)
+    // Add isFavourite flag to each user
+    const usersWithFavouriteStatus = filteredUsers.map(user => {
+        const userObj = user.toObject() // Convert Mongoose doc to plain object
+        return {
+            ...userObj,
+            isFavourite: myFavourites.includes(userObj._id.toString()),
+        }
+    })
+
+    res.status(200).json(usersWithFavouriteStatus)
+
   } catch (error: any) {
     console.error("Error in getUsersForSidebar: ", error.message)
     res.status(500).json({ error: "Internal server error" })

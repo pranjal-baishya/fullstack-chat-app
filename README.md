@@ -77,8 +77,15 @@ A real-time chat application built with the MERN stack (MongoDB, Express, React,
 
 ## Running the Application
 
+There are two main ways to run the application:
+
+**Method 1: Starting Backend and Frontend Separately (Recommended for Development)**
+
 1.  **Start the Backend Server:**
-    *   Make sure you are in the `backend` directory.
+    *   Navigate to the `backend` directory:
+        ```bash
+        cd backend
+        ```
     *   Run the development server (uses nodemon for auto-reloading):
         ```bash
         npm run dev
@@ -87,18 +94,28 @@ A real-time chat application built with the MERN stack (MongoDB, Express, React,
         ```bash
         npm start
         ```
-    *   The backend server should now be running (typically on `http://localhost:5000`).
+    *   The backend server should now be running (typically on `http://localhost:5000`). Keep this terminal open.
 
 2.  **Start the Frontend Development Server:**
     *   Open a *new terminal window/tab*.
     *   Navigate to the `frontend` directory:
         ```bash
-        cd frontend
+        cd frontend 
         ```
+        (Make sure you are in the `frontend` directory, not the root or `backend`)
     *   Run the development server:
         ```bash
         npm run dev
         ```
     *   The frontend development server should now be running (typically on `http://localhost:5173` or another port specified by Vite). Open this URL in your browser.
 
-You should now be able to access the chat application, sign up, log in, and chat in real-time.
+**Method 2: Using Root Scripts (Starts Backend Only)**
+
+*   You can start *only the backend server* from the root directory using:
+    ```bash
+    npm run start 
+    ```
+    This command executes `npm run start --prefix backend`.
+*   **Note:** This method **does not** start the frontend server. You will still need to start the frontend separately using the steps described in Method 1 (Step 2).
+
+Once both the backend and frontend are running, you should be able to access the chat application in your browser, sign up, log in, and chat in real-time.
